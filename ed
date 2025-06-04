@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local function queueRejoin()
     local teleportScript = [[
-        loadstring(game:HttpGet("https://pastebin.com/raw/your_code_here"))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/JulekKumpel/124124zd/refs/heads/main/ed"))()
     ]]
     pcall(function()
         queueonteleport(teleportScript)
