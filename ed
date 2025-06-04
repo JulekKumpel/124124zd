@@ -1,0 +1,62 @@
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function queueRejoin()
+    local teleportScript = [[
+        loadstring(game:HttpGet("https://pastebin.com/raw/your_code_here"))()
+    ]]
+    pcall(function()
+        queueonteleport(teleportScript)
+    end)
+end
+
+local function serverHop()
+    queueRejoin() -- always set before teleport
+    local success, response = pcall(function()
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true")
+    end)
+
+    if success then
+        local body = HttpService:JSONDecode(response)
+        local servers = {}
+
+        for _, v in ipairs(body.data or {}) do
+            if v.id and v.id ~= game.JobId and tonumber(v.playing) < tonumber(v.maxPlayers) then
+                table.insert(servers, v.id)
+            end
+        end
+
+        if #servers > 0 then
+            local target = servers[math.random(1, #servers)]
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, target, Players.LocalPlayer)
+        else
+            warn("⚠️ No servers available.")
+        end
+    else
+        warn("❌ Failed to get server list:", response)
+    end
+end
+
+local function collectAndSell()
+    local flowerFolder = workspace:WaitForChild("Flowers"):WaitForChild("cookfoodgame's Hive")
+    local remote = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("CleintInfo")
+
+    for _, flower in ipairs(flowerFolder:GetChildren()) do
+        if flower:IsA("Model") or flower:IsA("BasePart") then
+            remote:FireServer("CollectFlowers", flower)
+            task.wait(0.02)
+        end
+    end
+
+    remote:FireServer("SellAllFlowers")
+end
+
+-- MAIN LOOP
+while true do
+    collectAndSell()
+    task.wait(0.5)
+    serverHop()
+    task.wait(2) -- let teleport queue properly
+end
