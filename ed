@@ -1,62 +1,127 @@
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 
-local function queueRejoin()
-    local teleportScript = [[
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/JulekKumpel/124124zd/refs/heads/main/ed"))()
-    ]]
-    pcall(function()
-        queueonteleport(teleportScript)
-    end)
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+
+-- Delete all "Borders" folders in workspace
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if obj:IsA("Folder") and obj.Name == "Borders" then
+        print("Deleting Borders folder:", obj:GetFullName())
+        obj:Destroy()
+    end
 end
 
+-- Delete all "Barriers" folders in workspace
+for _, obj in ipairs(workspace:GetDescendants()) do
+    if obj:IsA("Folder") and obj.Name == "Barriers" then
+        print("Deleting Barriers folder:", obj:GetFullName())
+        obj:Destroy()
+    end
+end
+
+-- Find "HEARTSTONE" in workspace.Generators and notify
+for _, generator in ipairs(workspace:WaitForChild("Generators"):GetChildren()) do
+    if generator:IsA("Model") and generator.Name:lower():find("heartstone") then
+        local part = generator.PrimaryPart or generator:FindFirstChildWhichIsA("BasePart")
+        if part then
+            local pos = part.Position
+            print("Found HEARTSTONE at:", generator:GetFullName())
+            print("Location:", pos)
+
+            StarterGui:SetCore("SendNotification", {
+                Title = "💎 HEARTSTONE Found",
+                Text = "At " .. tostring(pos),
+                Duration = 6
+            })
+        else
+            print("HEARTSTONE model has no identifiable position:", generator:GetFullName())
+        end
+    end
+end
+
+-- Update character on respawn
+player.CharacterAdded:Connect(function(char)
+    character = char
+end)
+
+-- Speed boost to 50 on C key press
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.C then
+        local humanoid = character:FindFirstChildWhichIsA("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 50
+            print("Speed boosted to 50!")
+            StarterGui:SetCore("SendNotification", {
+                Title = "⚡ Speed Boosted",
+                Text = "WalkSpeed set to 50 (C pressed)",
+                Duration = 4
+            })
+        end
+    end
+end)
+
+-- Server hop function
 local function serverHop()
-    queueRejoin() -- always set before teleport
+    local PlaceId = game.PlaceId
+    local JobId = game.JobId
+    local servers = {}
+
     local success, response = pcall(function()
-        return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true")
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true")
     end)
 
-    if success then
-        local body = HttpService:JSONDecode(response)
-        local servers = {}
+    if not success then
+        warn("Failed to get servers list")
+        StarterGui:SetCore("SendNotification", {
+            Title = "Server Hop Failed",
+            Text = "Could not fetch server list.",
+            Duration = 5
+        })
+        return
+    end
 
-        for _, v in ipairs(body.data or {}) do
-            if v.id and v.id ~= game.JobId and tonumber(v.playing) < tonumber(v.maxPlayers) then
-                table.insert(servers, v.id)
+    local body = HttpService:JSONDecode(response)
+
+    if body and body.data then
+        for _, v in ipairs(body.data) do
+            if type(v) == "table" and tonumber(v.playing) and tonumber(v.maxPlayers) and v.playing < v.maxPlayers and v.id ~= JobId then
+                table.insert(servers, 1, v.id)
             end
         end
+    end
 
-        if #servers > 0 then
-            local target = servers[math.random(1, #servers)]
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, target, Players.LocalPlayer)
-        else
-            warn("⚠️ No servers available.")
-        end
+    if #servers > 0 then
+        local randomServer = servers[math.random(1, #servers)]
+        print("Teleporting to server:", randomServer)
+        TeleportService:TeleportToPlaceInstance(PlaceId, randomServer, player)
     else
-        warn("❌ Failed to get server list:", response)
+        StarterGui:SetCore("SendNotification", {
+            Title = "Server Hop",
+            Text = "Couldn't find a server.",
+            Duration = 5
+        })
     end
 end
 
-local function collectAndSell()
-    local flowerFolder = workspace:WaitForChild("Flowers"):WaitForChild("cookfoodgame's Hive")
-    local remote = ReplicatedStorage:WaitForChild("remotes"):WaitForChild("CleintInfo")
+-- Wait for G key press; rejoin to another server if not pressed in 5 seconds
+local pressedG = false
 
-    for _, flower in ipairs(flowerFolder:GetChildren()) do
-        if flower:IsA("Model") or flower:IsA("BasePart") then
-            remote:FireServer("CollectFlowers", flower)
-            task.wait(0.02)
-        end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.G then
+        pressedG = true
+        print("G pressed! No rejoin will happen.")
     end
+end)
 
-    remote:FireServer("SellAllFlowers")
-end
-
--- MAIN LOOP
-while true do
-    collectAndSell()
-    task.wait(0.5)
-    serverHop()
-    task.wait(2) -- let teleport queue properly
-end
+task.delay(5, function()
+    if not pressedG then
+        print("G not pressed in time. Server hopping...")
+        serverHop()
+    end
+end)
